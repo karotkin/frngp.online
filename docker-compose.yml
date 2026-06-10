@@ -1,0 +1,61 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: frngp-web:local
+    container_name: frngp-web
+    environment:
+      BASIC_AUTH_USER: ${BASIC_AUTH_USER:?задайте BASIC_AUTH_USER в .env}
+      BASIC_AUTH_PASS: ${BASIC_AUTH_PASS:?задайте BASIC_AUTH_PASS в .env}
+    ports:
+      - "${WEB_PORT:-8092}:80"
+    depends_on:
+      db:
+        condition: service_healthy
+      rate-api:
+        condition: service_started
+    restart: unless-stopped
+
+  rate-api:
+    build:
+      context: ./rate-api
+      dockerfile: Dockerfile
+    image: frngp-rate-api:local
+    container_name: frngp-rate-api
+    environment:
+      RATE_TTL_MIN: ${RATE_TTL_MIN:-30}
+      PGHOST: db
+      PGUSER: ${POSTGRES_USER:-frngp}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-frngp_pass}
+      PGDATABASE: ${POSTGRES_DB:-frngp}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    container_name: frngp-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-frngp}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-frngp_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-frngp}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-frngp} -d ${POSTGRES_DB:-frngp}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  # external: данные БД не трогает ни `down -v`, ни смена имени проекта.
+  # Создать один раз: docker volume create frngp_pgdata
+  pgdata:
+    external: true
+    name: frngp_pgdata

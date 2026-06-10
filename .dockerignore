@@ -1,0 +1,12 @@
+.git
+.gitignore
+.DS_Store
+**/.DS_Store
+.env
+.env.*
+docker-compose.yml
+Dockerfile
+.dockerignore
+db
+README.md
+*.md

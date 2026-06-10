@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <rect width="32" height="32" rx="8" fill="#6f9c5b"/>
+  <!-- шкала спидометра -->
+  <path d="M6.5 21.5 A9.5 9.5 0 0 1 25.5 21.5" fill="none" stroke="#ffffff" stroke-width="2.6" stroke-linecap="round"/>
+  <!-- деления -->
+  <g stroke="#ffffff" stroke-width="1.6" stroke-linecap="round" opacity="0.85">
+    <line x1="8.6" y1="15.3" x2="10.2" y2="16.6"/>
+    <line x1="16" y1="11.6" x2="16" y2="13.7"/>
+    <line x1="23.4" y1="15.3" x2="21.8" y2="16.6"/>
+  </g>
+  <!-- стрелка -->
+  <line x1="16" y1="21.5" x2="21.2" y2="14.6" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round"/>
+  <circle cx="16" cy="21.5" r="2.4" fill="#ffffff"/>
+</svg>

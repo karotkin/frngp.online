@@ -1,0 +1,125 @@
+/* ============================================================
+   Дизайн-токены — тёплый кремовый дашборд (палитра sage)
+   ============================================================ */
+:root {
+  /* фон / поверхности */
+  --bg:        #f4f1e8;   /* страница, тёплый кремовый */
+  --surface:   #fbfaf4;   /* карточки, почти белый */
+  --surface-2: #f7f4ea;   /* вложенные блоки */
+  --surface-3: #efebdd;   /* трек/полоски */
+  --line:      #e6e0cf;   /* границы карточек */
+  --line-soft: #ece7d8;
+
+  /* текст */
+  --ink:       #2c2a22;   /* основной, тёплый почти-чёрный */
+  --ink-2:     #6f6a59;   /* вторичный */
+  --ink-3:     #a39d89;   /* третичный / подписи */
+
+  /* акценты (sage) — одинаковая светлота/хрома, разный тон */
+  --green:   #6f9c5b;
+  --green-d: #57814a;
+  --green-bg:#e6efe0;
+  --terra:   #c8704f;
+  --terra-bg:#f3e0d7;
+  --gold:    #cba23e;
+  --gold-bg: #f1e8cf;
+  --slate:   #6d8f9b;   /* доп. серия для графиков */
+  --slate-bg:#e2eaec;
+
+  --radius:   16px;
+  --radius-s: 11px;
+  --radius-xs: 8px;
+  --shadow:   0 1px 2px rgba(60,54,36,.04), 0 8px 24px rgba(60,54,36,.05);
+  --shadow-s: 0 1px 2px rgba(60,54,36,.05);
+
+  --font: 'Golos Text', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  --pad: 22px;           /* плотность карточек */
+  --gap: 18px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+body { font-size: 15px; }
+
+::selection { background: var(--green-bg); }
+
+/* плотность через data-атрибут */
+[data-density="compact"] { --pad: 15px; --gap: 12px; }
+[data-density="comfy"]   { --pad: 28px; --gap: 24px; }
+
+/* тёмная тема */
+[data-theme="dark"] {
+  --bg:        #20211c;
+  --surface:   #2a2b25;
+  --surface-2: #31322b;
+  --surface-3: #3a3b32;
+  --line:      #3c3d34;
+  --line-soft: #353630;
+  --ink:       #efece1;
+  --ink-2:     #b3ad9a;
+  --ink-3:     #837e6d;
+  --green-bg:#2f3a2a;
+  --terra-bg:#3d2c25;
+  --gold-bg: #3a3320;
+  --slate-bg:#293338;
+  --shadow:   0 1px 2px rgba(0,0,0,.2), 0 8px 24px rgba(0,0,0,.22);
+}
+
+/* ---------- утилиты ---------- */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-s);
+}
+
+.eyebrow {
+  font-size: 11px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--ink-3);
+}
+
+.mono { font-family: var(--mono); font-feature-settings: "tnum" 1; }
+.tnum { font-variant-numeric: tabular-nums; }
+
+/* пилюли статуса */
+.pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 11px; border-radius: 999px;
+  font-size: 11px; font-weight: 600; letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.pill .dot { width: 7px; height: 7px; border-radius: 50%; }
+.pill.green { background: var(--green-bg); color: var(--green-d); }
+.pill.green .dot { background: var(--green); }
+.pill.terra { background: var(--terra-bg); color: var(--terra); }
+.pill.terra .dot { background: var(--terra); }
+.pill.gold  { background: var(--gold-bg);  color: #9c7c22; }
+.pill.gold  .dot { background: var(--gold); }
+.pill.slate { background: var(--slate-bg); color: #4d6c78; }
+.pill.slate .dot { background: var(--slate); }
+
+/* скроллбар */
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-thumb { background: var(--line); border-radius: 99px; border: 3px solid var(--bg); }
+*::-webkit-scrollbar-track { background: transparent; }
+
+/* пульсация статуса live */
+@keyframes livepulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+.live-dot { animation: livepulse 1.8s ease-in-out infinite; }
+
+input, button, textarea { font-family: inherit; color: inherit; }
+button { cursor: pointer; }

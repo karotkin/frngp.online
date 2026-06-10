@@ -1,0 +1,5 @@
+.env
+.DS_Store
+backups/
+.claude/
+node_modules/
