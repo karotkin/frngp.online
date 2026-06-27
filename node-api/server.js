@@ -114,20 +114,23 @@ const CLIENTS = [
     peers: ['p2p_peers{job="geth"}'],
     // geth synced: голова догнала заголовок (нет отставания)
     syncedExpr: '(chain_head_header{job="geth"} - chain_head_block{job="geth"}) < bool 4',
+    // отставание в секундах ≈ блоков отставания × 12с
+    behindExpr: '12 * clamp_min(chain_head_header{job="geth"} - chain_head_block{job="geth"}, 0)',
   },
   {
     id: 'lighthouse', name: 'Lighthouse', role: 'NodeE · CL', host: 'nodee', inst: () => I.nodee,
     head: ['beacon_head_slot{job="lighthouse"}'],
     peers: ['libp2p_peers{job="lighthouse"}', 'libp2p_peer_count{job="lighthouse"}'],
     syncedExpr: 'sync_eth2_synced{job="lighthouse"}',
-    // дистанция синхры (слотов отставания), если есть present-slot
-    lag: ['beacon_clock_present_slot{job="lighthouse"} - beacon_head_slot{job="lighthouse"}'],
+    // секунды отставания = (текущий слот − слот головы) × длительность слота
+    behindExpr: 'clamp_min(slotclock_present_slot{job="lighthouse"} - beacon_head_slot{job="lighthouse"}, 0) * slotclock_slot_time_seconds{job="lighthouse"}',
   },
   {
     id: 'reth', name: 'base-reth', role: 'NodeB · EL', host: 'nodeb', inst: () => I.nodeb,
     head: ['reth_blockchain_tree_canonical_chain_height{job="reth"}', 'reth_blockchain_tree_in_mem_state_latest_block{job="reth"}'],
     peers: ['reth_network_connected_peers{job="reth"}'],
     syncedExpr: null, // у reth нет чистого synced-gauge; статус по peers/head
+    chain: 'base', behindRef: 'head', // отставание оцениваем по расчётному tip
   },
   {
     // base-consensus (Rust) не отдаёт L2 head-номера напрямую; берём из reth
@@ -137,28 +140,41 @@ const CLIENTS = [
     safe: ['reth_blockchain_tree_safe_block_height{job="reth"}'],
     peers: ['base_node_gossip_peer_count{job="opnode"}'],
     syncedExpr: 'reth_blockchain_tree_safe_block_height{job="reth"} > bool 0',
+    chain: 'base', behindRef: 'safe',
   },
 ];
 
+// Base mainnet L2 genesis (для оценки tip при синхре): timestamp + время блока
+const BASE_GENESIS_TS = 1686789347, BASE_BLOCKTIME = 2;
+
 async function clientCard(c) {
-  const [head, peers, synced, safe, lag] = await Promise.all([
+  const [head, peers, synced, safe, behindRaw] = await Promise.all([
     firstOf(c.head || []),
     firstOf(c.peers || []),
     c.syncedExpr ? instant(c.syncedExpr) : null,
     firstOf(c.safe || []),
-    firstOf(c.lag || []),
+    c.behindExpr ? instant(c.behindExpr) : null,
   ]);
-  // статус: down если хоста/метрик нет; warn если рассинхрон/мало пиров; online ок
+
+  // секунды отставания от головы
+  let behindSec = behindRaw == null ? null : Math.max(0, Math.round(behindRaw));
+  if (behindSec == null && c.chain === 'base') {
+    const estTip = (Date.now() / 1000 - BASE_GENESIS_TS) / BASE_BLOCKTIME;
+    const ref = c.behindRef === 'safe' ? safe : head;
+    if (ref != null) behindSec = Math.max(0, Math.round((estTip - ref) * BASE_BLOCKTIME));
+  }
+
+  // статус: down если нет метрик; warn если рассинхрон/мало пиров/большое отставание
   let status = 'online';
   if (head == null && peers == null) status = 'down';
-  else if (synced === 0 || (lag != null && lag > 16) || (peers != null && peers < 1)) status = 'warn';
+  else if (synced === 0 || (peers != null && peers < 1) || (behindSec != null && behindSec > 120)) status = 'warn';
   return {
     id: c.id, name: c.name, role: c.role, host: c.host,
     status,
     head, peers,
     synced: synced == null ? null : synced === 1,
     safe: safe ?? null,
-    lag: lag == null ? null : Math.round(lag),
+    behindSec,
   };
 }
 

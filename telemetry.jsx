@@ -53,6 +53,15 @@ function Legend({ items }) {
 }
 
 const dash = (v, suf = '') => (v == null ? '—' : `${typeof v === 'number' ? fmtInt(Math.round(v)) : v}${suf}`);
+/* отставание от головы (Seconds Behind Head) в человекочитаемом виде */
+function fmtBehind(sec) {
+  if (sec == null) return '—';
+  if (sec < 30) return 'у головы';
+  if (sec < 90) return `${sec}с`;
+  if (sec < 5400) return `${Math.round(sec / 60)}м`;
+  if (sec < 172800) return `${Math.round(sec / 3600)}ч`;
+  return `${Math.round(sec / 86400)}д`;
+}
 const statusPill = (st) => {
   if (st === 'online') return { cls: 'green', label: 'online' };
   if (st === 'warn') return { cls: 'gold', label: 'sync' };
@@ -66,12 +75,12 @@ function nodeStats(c) {
     { label: 'unsafe', value: dash(c.head) },
     { label: 'safe', value: dash(c.safe) },
     { label: 'пиры', value: dash(c.peers), meter: c.peers, max: 80 },
-    { label: 'sync', value: c.safe ? 'ok' : 'wait' },
+    { label: 'отставание', value: fmtBehind(c.behindSec) },
   ];
   if (c.id === 'lighthouse') return [
     { label: 'слот', value: dash(c.head) },
     { label: 'пиры', value: dash(c.peers), meter: c.peers, max: 100 },
-    { label: 'отставание', value: c.lag == null ? '—' : `${c.lag} сл` },
+    { label: 'отставание', value: fmtBehind(c.behindSec) },
     { label: 'синхро', value: c.synced == null ? '—' : (c.synced ? 'ok' : 'нет') },
   ];
   // EL (geth / reth)
@@ -79,7 +88,7 @@ function nodeStats(c) {
     { label: 'голова', value: dash(c.head) },
     { label: 'пиры', value: dash(c.peers), meter: c.peers, max: c.id === 'geth' ? 80 : 60 },
     { label: 'синхро', value: c.synced == null ? '—' : (c.synced ? 'ok' : 'нет') },
-    { label: 'хост', value: HOST_NAME[c.host] || c.host },
+    { label: 'отставание', value: fmtBehind(c.behindSec) },
   ];
 }
 
@@ -169,7 +178,7 @@ function deriveAlerts(cards, hosts) {
   const out = [];
   cards.forEach((c) => {
     if (c.status === 'down') out.push({ level: 'terra', title: `${c.name} · offline`, text: 'клиент не отвечает / нет метрик' });
-    else if (c.status === 'warn') out.push({ level: 'gold', title: `${c.name} · рассинхрон`, text: `пиры ${dash(c.peers)}${c.lag != null ? `, отставание ${c.lag} сл` : ''}` });
+    else if (c.status === 'warn') out.push({ level: 'gold', title: `${c.name} · синхронизация`, text: `пиры ${dash(c.peers)} · отставание ${fmtBehind(c.behindSec)}` });
   });
   hosts.forEach((h) => {
     if (h.diskFreePct != null && h.diskFreePct < 12) out.push({ level: 'gold', title: `${h.name} · диск`, text: `свободно ${h.diskFreePct}%` });
@@ -323,7 +332,7 @@ function NodeChartSection({ host, series }) {
 }
 
 function ClientTable({ cards }) {
-  const cols = ['Клиент', 'Хост', 'Роль', 'Голова', 'Пиры', 'Синхро', 'Статус'];
+  const cols = ['Клиент', 'Хост', 'Роль', 'Голова', 'Пиры', 'Отставание', 'Синхро', 'Статус'];
   return (
     <div style={{ overflowX: 'auto' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
@@ -346,6 +355,7 @@ function ClientTable({ cards }) {
                 <td style={{ padding: '11px 14px', color: 'var(--ink-3)' }}>{c.role}</td>
                 <td style={{ padding: '11px 14px', textAlign: 'right' }} className="tnum">{dash(c.head)}</td>
                 <td style={{ padding: '11px 14px', textAlign: 'right' }} className="tnum">{dash(c.peers)}</td>
+                <td style={{ padding: '11px 14px' }} className="tnum">{fmtBehind(c.behindSec)}</td>
                 <td style={{ padding: '11px 14px' }}>{c.synced == null ? '—' : (c.synced ? 'ok' : (c.safe ? 'safe ok' : 'нет'))}</td>
                 <td style={{ padding: '11px 14px' }}>
                   <span className={`pill ${pill.cls}`} style={{ padding: '3px 9px' }}>
