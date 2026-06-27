@@ -111,6 +111,73 @@ function LineArea({ series, height = 170, max, area = true, showGrid = true, yUn
   );
 }
 
+/* ---------- График с осями/шкалами (Y-значения + единицы, X-время) ---------- */
+function niceMax(v) {
+  if (!(v > 0)) return 1;
+  const pow = Math.pow(10, Math.floor(Math.log10(v)));
+  const n = v / pow;
+  const step = n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10;
+  return step * pow;
+}
+function fmtTick(v) {
+  if (v >= 1000) return (v / 1000).toFixed(v % 1000 ? 1 : 0) + 'k';
+  return Number.isInteger(v) ? String(v) : v.toFixed(1);
+}
+function Plot({ series, height = 170, max, area = true, unit = '', xLabels }) {
+  const id = useId().replace(/:/g, '');
+  const W = 600, H = height, padT = 10, padB = 6, padL = 2, padR = 2;
+  const valid = (series || []).filter(s => Array.isArray(s.data) && s.data.length);
+  const n = Math.max(...valid.map(s => s.data.length), 2);
+  const peak = Math.max(0, ...valid.flatMap(s => s.data));
+  const top = max || niceMax(peak * 1.1) || 1;
+  const x = (i) => padL + (i / (n - 1)) * (W - padL - padR);
+  const y = (v) => padT + (1 - v / top) * (H - padT - padB);
+  const line = (d) => d.map((v, i) => `${i === 0 ? 'M' : 'L'} ${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(' ');
+  const fill = (d) => `${line(d)} L ${x(d.length - 1)} ${H - padB} L ${x(0)} ${H - padB} Z`;
+  const ticks = [1, 0.75, 0.5, 0.25, 0].map(f => +(top * f).toFixed(2));
+  const defXLabels = ['−60м', '−45м', '−30м', '−15м', 'сейчас'];
+  const xs = xLabels || defXLabels;
+  return (
+    <div style={{ display: 'flex', gap: 8 }}>
+      {/* ось Y */}
+      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+        height, paddingTop: padT, paddingBottom: padB + 16, width: 44, textAlign: 'right',
+        flexShrink: 0 }}>
+        {ticks.map((t, i) => (
+          <span key={i} style={{ fontSize: 10, color: 'var(--ink-3)', lineHeight: 1 }} className="tnum">
+            {fmtTick(t)}{i === 0 && unit ? ' ' + unit : ''}
+          </span>
+        ))}
+      </div>
+      {/* область графика + ось X */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ width: '100%', height, display: 'block' }}>
+          <defs>
+            {valid.map((s, i) => (
+              <linearGradient key={i} id={`${id}-g${i}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={s.color} stopOpacity="0.20" />
+                <stop offset="100%" stopColor={s.color} stopOpacity="0" />
+              </linearGradient>
+            ))}
+          </defs>
+          {[1, 0.75, 0.5, 0.25, 0].map((g, i) => (
+            <line key={i} x1={padL} x2={W - padR} y1={padT + g * (H - padT - padB)} y2={padT + g * (H - padT - padB)}
+              stroke="var(--line-soft)" strokeWidth="1" strokeDasharray={g === 0 ? '0' : '3 4'} />
+          ))}
+          {area && valid.map((s, i) => <path key={`a${i}`} d={fill(s.data)} fill={`url(#${id}-g${i})`} />)}
+          {valid.map((s, i) => (
+            <path key={`l${i}`} d={line(s.data)} fill="none" stroke={s.color}
+              strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+          ))}
+        </svg>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
+          {xs.map((l, i) => <span key={i} style={{ fontSize: 10, color: 'var(--ink-3)' }}>{l}</span>)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ---------- Спарклайн (мини-график) ---------- */
 function Sparkline({ data, color, height = 38, fill = true }) {
   const id = useId().replace(/:/g, '');
@@ -164,4 +231,4 @@ function Meter({ value, max = 100, color, height = 7 }) {
   );
 }
 
-Object.assign(window, { Donut, Gauge, LineArea, Sparkline, Bars, Meter, cssvar });
+Object.assign(window, { Donut, Gauge, LineArea, Plot, Sparkline, Bars, Meter, cssvar });

@@ -172,35 +172,48 @@ async function buildTelemetry() {
   const hosts = [hostE, hostB];
   const hostById = { nodee: hostE, nodeb: hostB };
 
-  // ряды графиков (по хостам)
-  const cpuE = series(HW(I.nodee).cpu), cpuB = series(HW(I.nodeb).cpu);
-  const netInE = series(`8*sum(rate(node_network_receive_bytes_total{device!~"lo|wg.*|docker.*|veth.*|br.*",instance="${I.nodee}:9100"}[2m]))/1e6`);
-  const netOutE = series(`8*sum(rate(node_network_transmit_bytes_total{device!~"lo|wg.*|docker.*|veth.*|br.*",instance="${I.nodee}:9100"}[2m]))/1e6`);
-  const peersGeth = series('p2p_peers{job="geth"}');
-  const peersReth = series('reth_network_connected_peers{job="reth"}');
-  const diskReadB = series(`sum(rate(node_disk_read_bytes_total{instance="${I.nodeb}:9100"}[2m]))/1e6`);
-  const diskWriteB = series(`sum(rate(node_disk_written_bytes_total{instance="${I.nodeb}:9100"}[2m]))/1e6`);
+  // ряды графиков — с тегом node, чтобы фронт рисовал по нодам ОТДЕЛЬНО
+  const dev = 'device!~"lo|wg.*|docker.*|veth.*|br.*"';
+  const netIn = (i) => `8*sum(rate(node_network_receive_bytes_total{${dev},instance="${i}:9100"}[2m]))/1e6`;
+  const netOut = (i) => `8*sum(rate(node_network_transmit_bytes_total{${dev},instance="${i}:9100"}[2m]))/1e6`;
+  const diskR = (i) => `sum(rate(node_disk_read_bytes_total{instance="${i}:9100"}[2m]))/1e6`;
+  const diskW = (i) => `sum(rate(node_disk_written_bytes_total{instance="${i}:9100"}[2m]))/1e6`;
 
-  const [scpuE, scpuB, sNetIn, sNetOut, sPeersG, sPeersR, sDR, sDW] = await Promise.all([
-    cpuE, cpuB, netInE, netOutE, peersGeth, peersReth, diskReadB, diskWriteB,
+  const [
+    scpuE, scpuB, niE, noE, niB, noB,
+    pGeth, pLH, pReth, pOp, drE, dwE, drB, dwB,
+  ] = await Promise.all([
+    series(HW(I.nodee).cpu), series(HW(I.nodeb).cpu),
+    series(netIn(I.nodee)), series(netOut(I.nodee)),
+    series(netIn(I.nodeb)), series(netOut(I.nodeb)),
+    series('p2p_peers{job="geth"}'), series('libp2p_peers{job="lighthouse"}'),
+    series('reth_network_connected_peers{job="reth"}'), series('base_node_gossip_peer_count{job="opnode"}'),
+    series(diskR(I.nodee)), series(diskW(I.nodee)),
+    series(diskR(I.nodeb)), series(diskW(I.nodeb)),
   ]);
 
   const series_ = {
     cpu: [
-      { name: 'NodeE', color: '#6f9c5b', data: scpuE },
-      { name: 'NodeB', color: '#6d8f9b', data: scpuB },
+      { name: 'NodeE', node: 'nodee', unit: '%', color: '#6f9c5b', data: scpuE },
+      { name: 'NodeB', node: 'nodeb', unit: '%', color: '#6d8f9b', data: scpuB },
     ],
     net: [
-      { name: 'Входящий', color: '#6f9c5b', data: sNetIn },
-      { name: 'Исходящий', color: '#c8704f', data: sNetOut },
+      { name: 'NodeE ↓', node: 'nodee', unit: 'Мбит', color: '#6f9c5b', data: niE },
+      { name: 'NodeE ↑', node: 'nodee', unit: 'Мбит', color: '#c8704f', data: noE },
+      { name: 'NodeB ↓', node: 'nodeb', unit: 'Мбит', color: '#6f9c5b', data: niB },
+      { name: 'NodeB ↑', node: 'nodeb', unit: 'Мбит', color: '#c8704f', data: noB },
     ],
     peers: [
-      { name: 'Geth', color: '#6f9c5b', data: sPeersG },
-      { name: 'reth', color: '#cba23e', data: sPeersR },
+      { name: 'Geth', node: 'nodee', unit: '', color: '#6f9c5b', data: pGeth },
+      { name: 'Lighthouse', node: 'nodee', unit: '', color: '#6d8f9b', data: pLH },
+      { name: 'reth', node: 'nodeb', unit: '', color: '#cba23e', data: pReth },
+      { name: 'op-node', node: 'nodeb', unit: '', color: '#c8704f', data: pOp },
     ],
     disk: [
-      { name: 'Чтение', color: '#6d8f9b', data: sDR },
-      { name: 'Запись', color: '#cba23e', data: sDW },
+      { name: 'NodeE чтение', node: 'nodee', unit: 'МБ/с', color: '#6d8f9b', data: drE },
+      { name: 'NodeE запись', node: 'nodee', unit: 'МБ/с', color: '#cba23e', data: dwE },
+      { name: 'NodeB чтение', node: 'nodeb', unit: 'МБ/с', color: '#6d8f9b', data: drB },
+      { name: 'NodeB запись', node: 'nodeb', unit: 'МБ/с', color: '#cba23e', data: dwB },
     ],
   };
 

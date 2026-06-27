@@ -224,42 +224,8 @@ function TelemetryPage() {
         {cards.map((c) => <NodeCard key={c.id} c={c} spark={sparkByHost[HOST_NAME[c.host]]} />)}
       </div>
 
-      {/* charts row */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 'var(--gap)' }}>
-        <div className="card" style={{ padding: 'var(--pad)' }}>
-          <SectionTitle right={hasSeries(series.cpu) && <Legend items={(series.cpu || []).map(c => ({ name: c.name, color: c.color }))} />}>
-            Нагрузка CPU · последний час
-          </SectionTitle>
-          {hasSeries(series.cpu) ? <LineArea series={series.cpu} height={200} max={110} area={false} /> : <Empty />}
-        </div>
-        <div className="card" style={{ padding: 'var(--pad)' }}>
-          <SectionTitle right={hasSeries(series.net) && <Legend items={series.net} />}>Сетевой трафик, Мбит/с</SectionTitle>
-          {hasSeries(series.net) ? <LineArea series={series.net} height={200} /> : <Empty />}
-        </div>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.1fr', gap: 'var(--gap)' }}>
-        <div className="card" style={{ padding: 'var(--pad)' }}>
-          <SectionTitle right={hasSeries(series.peers) && <Legend items={series.peers} />}>P2P-пиры</SectionTitle>
-          {hasSeries(series.peers) ? <LineArea series={series.peers} height={150} /> : <Empty />}
-        </div>
-        <div className="card" style={{ padding: 'var(--pad)' }}>
-          <SectionTitle right={hasSeries(series.disk) && <Legend items={series.disk} />}>Диски NodeB · МБ/с</SectionTitle>
-          {hasSeries(series.disk) ? <LineArea series={series.disk} height={150} /> : <Empty />}
-        </div>
-        <div className="card" style={{ padding: 'var(--pad)' }}>
-          <SectionTitle>Температура хостов, °C</SectionTitle>
-          <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center', gap: 6, paddingTop: 6 }}>
-            {hosts.map((h) => (
-              <div key={h.id} style={{ textAlign: 'center' }}>
-                <Gauge value={h.temp == null ? 0 : h.temp} max={90} unit="°" size={104}
-                  color={h.temp == null ? 'var(--surface-3)' : h.temp > 70 ? 'var(--terra)' : h.temp > 58 ? 'var(--gold)' : 'var(--green)'} />
-                <div style={{ fontSize: 11.5, color: 'var(--ink-2)', marginTop: 4 }}>{h.name}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+      {/* графики ПО НОДАМ отдельно (со шкалами/осями) */}
+      {hosts.map((h) => <NodeChartSection key={h.id} host={h} series={series} />)}
 
       {/* интеграции + алерты */}
       <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 'var(--gap)' }}>
@@ -315,8 +281,45 @@ function TelemetryPage() {
   );
 }
 
-function Empty() {
-  return <div style={{ height: 150, display: 'grid', placeItems: 'center', color: 'var(--ink-3)', fontSize: 12 }}>нет данных за период</div>;
+function Empty({ height = 150 }) {
+  return <div style={{ height, display: 'grid', placeItems: 'center', color: 'var(--ink-3)', fontSize: 12 }}>нет данных за период</div>;
+}
+
+/* карточка одного графика: заголовок + легенда + Plot со шкалами */
+function ChartCard({ title, series, max, unit, area = true, height = 168 }) {
+  const has = (series || []).some((s) => Array.isArray(s.data) && s.data.length);
+  return (
+    <div className="card" style={{ padding: 'var(--pad)' }}>
+      <SectionTitle right={has && <Legend items={series.map((s) => ({ name: s.name, color: s.color }))} />}>{title}</SectionTitle>
+      {has ? <Plot series={series} max={max} unit={unit} area={area} height={height} /> : <Empty height={height} />}
+    </div>
+  );
+}
+
+/* секция одной ноды: 4 графика (CPU/Сеть/Пиры/Диск) только её рядов */
+function NodeChartSection({ host, series }) {
+  const pick = (arr) => (arr || []).filter((s) => s.node === host.id);
+  const role = host.id === 'nodee' ? 'Ethereum L1 · Geth + Lighthouse' : 'Base L2 · base-reth + op-node';
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+        <div>
+          <div className="eyebrow">{role}</div>
+          <h2 style={{ margin: '3px 0 0', fontSize: 19, fontWeight: 700, letterSpacing: '-.01em' }}>{host.name}</h2>
+        </div>
+        <span className={`pill ${host.up ? 'green' : 'terra'}`}>
+          <span className="dot live-dot" />{host.up ? 'хост online' : 'offline'}
+          {host.up && <span style={{ color: 'var(--ink-3)', marginLeft: 8, fontWeight: 500 }}>uptime {host.uptime || '—'}</span>}
+        </span>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--gap)' }}>
+        <ChartCard title="Нагрузка CPU, %" series={pick(series.cpu)} max={100} unit="%" area={false} />
+        <ChartCard title="Сеть, Мбит/с" series={pick(series.net)} unit="Мбит" />
+        <ChartCard title="P2P-пиры" series={pick(series.peers)} unit="" area={false} />
+        <ChartCard title="Диск I/O, МБ/с" series={pick(series.disk)} unit="МБ/с" />
+      </div>
+    </div>
+  );
 }
 
 function ClientTable({ cards }) {
