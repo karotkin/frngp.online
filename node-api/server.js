@@ -178,12 +178,37 @@ async function clientCard(c) {
   };
 }
 
+/* ---------------- прогресс staged-sync reth (textfile-экспортёр) ---------------- */
+const STAGE_NAMES = {
+  1: 'Headers', 2: 'Bodies', 3: 'SenderRecovery', 4: 'Execution', 5: 'Merkle',
+  6: 'AccountHashing', 7: 'StorageHashing', 8: 'TxLookup', 9: 'IndexAcct',
+  10: 'IndexStorage', 11: 'PruneSenders', 12: 'Prune', 13: 'Era', 14: 'Finish',
+};
+async function fetchRethSync() {
+  const [idx, cp, tg, live, rate] = await Promise.all([
+    instant('reth_sync_stage_index'),
+    instant('reth_sync_stage_checkpoint'),
+    instant('reth_sync_stage_target'),
+    instant('reth_sync_live'),
+    instant('rate(reth_sync_stage_checkpoint[10m])'),
+  ]);
+  if (idx == null) return null; // экспортёр ещё не отдал
+  const pct = tg > 0 ? Math.min(100, +(100 * cp / tg).toFixed(1)) : null;
+  let etaSec = null;
+  if (rate > 0 && tg > cp) etaSec = Math.round((tg - cp) / rate);
+  return {
+    stage: STAGE_NAMES[idx] || '—', idx, total: 14,
+    pct, etaSec, live: live === 1,
+  };
+}
+
 /* ---------------- сборка /telemetry ---------------- */
 async function buildTelemetry() {
-  const [hostE, hostB, cards] = await Promise.all([
+  const [hostE, hostB, cards, rethSync] = await Promise.all([
     host('nodee', 'NodeE', I.nodee),
     host('nodeb', 'NodeB', I.nodeb),
     Promise.all(CLIENTS.map(clientCard)),
+    fetchRethSync(),
   ]);
   const hosts = [hostE, hostB];
   const hostById = { nodee: hostE, nodeb: hostB };
@@ -245,7 +270,10 @@ async function buildTelemetry() {
       peersTotal,
     },
     hosts,
-    cards: cards.map((c) => ({ ...c, hw: hostById[c.host] || null })),
+    cards: cards.map((c) => ({
+      ...c, hw: hostById[c.host] || null,
+      sync: (c.id === 'reth' || c.id === 'opnode') ? rethSync : null,
+    })),
     series: series_,
   };
 }

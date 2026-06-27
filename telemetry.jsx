@@ -63,6 +63,12 @@ function fmtBehind(sec) {
   if (sec < 172800) return `${Math.round(sec / 3600)}ч`;
   return `${Math.round(sec / 86400)}д`;
 }
+function fmtEta(sec) {
+  if (!sec || sec < 0) return '';
+  if (sec < 5400) return `~${Math.round(sec / 60)}м`;
+  if (sec < 172800) return `~${Math.round(sec / 3600)}ч`;
+  return `~${Math.round(sec / 86400)}д`;
+}
 const statusPill = (st) => {
   if (st === 'online') return { cls: 'green', label: 'online' };
   if (st === 'warn') return { cls: 'gold', label: 'sync' };
@@ -72,11 +78,15 @@ const statusPill = (st) => {
 
 /* строки метрик ноды под тип клиента */
 function nodeStats(c) {
+  const s = c.sync;
+  const syncing = s && !s.live && s.idx > 0 && s.idx < 14;
   if (c.id === 'opnode') return [
     { label: 'unsafe', value: dash(c.head) },
     { label: 'safe', value: dash(c.safe) },
     { label: 'пиры', value: dash(c.peers), meter: c.peers, max: 80 },
-    { label: 'отставание', value: fmtBehind(c.behindSec) },
+    syncing
+      ? { label: 'EL-sync', value: s.pct != null ? `${s.pct}%` : '—', meter: s.pct, max: 100 }
+      : { label: 'отставание', value: fmtBehind(c.behindSec) },
   ];
   if (c.id === 'lighthouse') return [
     { label: 'слот', value: dash(c.head) },
@@ -85,6 +95,12 @@ function nodeStats(c) {
     { label: 'синхро', value: c.synced == null ? '—' : (c.synced ? 'ok' : 'нет') },
   ];
   // EL (geth / reth)
+  if (c.id === 'reth' && syncing) return [
+    { label: 'голова', value: dash(c.head) },
+    { label: 'пиры', value: dash(c.peers), meter: c.peers, max: 60 },
+    { label: `стадия ${s.idx}/${s.total}`, value: s.stage },
+    { label: 'прогресс', value: (s.pct != null ? `${s.pct}%` : '—') + (s.etaSec ? ` ${fmtEta(s.etaSec)}` : ''), meter: s.pct, max: 100 },
+  ];
   return [
     { label: 'голова', value: dash(c.head) },
     { label: 'пиры', value: dash(c.peers), meter: c.peers, max: c.id === 'geth' ? 80 : 60 },
