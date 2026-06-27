@@ -56,7 +56,8 @@ const dash = (v, suf = '') => (v == null ? '—' : `${typeof v === 'number' ? fm
 /* отставание от головы (Seconds Behind Head) в человекочитаемом виде */
 function fmtBehind(sec) {
   if (sec == null) return '—';
-  if (sec < 30) return 'у головы';
+  if (sec > 14 * 86400) return 'синхра';   // первичная синхра — лаг-метрика бессмысленна
+  if (sec < 30) return '0с';               // у головы
   if (sec < 90) return `${sec}с`;
   if (sec < 5400) return `${Math.round(sec / 60)}м`;
   if (sec < 172800) return `${Math.round(sec / 3600)}ч`;
