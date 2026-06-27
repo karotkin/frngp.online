@@ -125,16 +125,18 @@ const CLIENTS = [
   },
   {
     id: 'reth', name: 'base-reth', role: 'NodeB · EL', host: 'nodeb', inst: () => I.nodeb,
-    head: ['reth_blockchain_tree_canonical_chain_height{job="reth"}', 'reth_sync_checkpoint{job="reth"}'],
+    head: ['reth_blockchain_tree_canonical_chain_height{job="reth"}', 'reth_blockchain_tree_in_mem_state_latest_block{job="reth"}'],
     peers: ['reth_network_connected_peers{job="reth"}'],
-    syncedExpr: 'reth_sync_checkpoint{job="reth"} > bool 0', // уточним при раскатке
+    syncedExpr: null, // у reth нет чистого synced-gauge; статус по peers/head
   },
   {
+    // base-consensus (Rust) не отдаёт L2 head-номера напрямую; берём из reth
+    // (op-node сам выставляет safe/unsafe в reth через forkchoice).
     id: 'opnode', name: 'op-node', role: 'NodeB · CL', host: 'nodeb', inst: () => I.nodeb,
-    head: ['op_node_default_refs_number{job="opnode",type="unsafe_l2"}', 'op_node_refs_number{job="opnode",type="unsafe_l2"}'],
-    safe: ['op_node_default_refs_number{job="opnode",type="safe_l2"}', 'op_node_refs_number{job="opnode",type="safe_l2"}'],
-    peers: ['op_node_default_p2p_peer_count{job="opnode"}', 'op_p2p_peer_count{job="opnode"}'],
-    syncedExpr: '1', // op-node «здоров», если safe двигается — оценим во фронте
+    head: ['reth_blockchain_tree_in_mem_state_latest_block{job="reth"}', 'reth_blockchain_tree_canonical_chain_height{job="reth"}'],
+    safe: ['reth_blockchain_tree_safe_block_height{job="reth"}'],
+    peers: ['base_node_gossip_peer_count{job="opnode"}'],
+    syncedExpr: 'reth_blockchain_tree_safe_block_height{job="reth"} > bool 0',
   },
 ];
 

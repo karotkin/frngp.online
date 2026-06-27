@@ -33,7 +33,7 @@ scrape_configs:
   - job_name: reth
     metrics_path: /
     static_configs:
-      - targets: ['10.8.0.3:9001']
+      - targets: ['10.8.0.3:6060']   # base-entrypoint биндит --metrics=0.0.0.0:6060
         labels: { host: nodeb }
 
   - job_name: opnode
