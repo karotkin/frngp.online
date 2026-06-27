@@ -21,6 +21,8 @@ services:
         condition: service_healthy
       rate-api:
         condition: service_started
+      node-api:
+        condition: service_started
 
   rate-api:
     build:
@@ -38,6 +40,37 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    networks:
+      - internal
+
+  # ---- телеметрия нод ETH/Base ----
+  node-api:
+    build:
+      context: ./node-api
+      dockerfile: Dockerfile
+    image: frngp-node-api:local
+    container_name: frngp-node-api
+    restart: unless-stopped
+    environment:
+      PROM_URL: http://prometheus:9090
+      NODEE_INSTANCE: ${NODEE_INSTANCE:-10.8.0.2}
+      NODEB_INSTANCE: ${NODEB_INSTANCE:-10.8.0.3}
+    depends_on:
+      - prometheus
+    networks:
+      - internal
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: frngp-prometheus
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=15d
+      - --web.enable-lifecycle
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - promdata:/prometheus
     networks:
       - internal
 
@@ -73,3 +106,4 @@ volumes:
   pgdata:
     external: true
     name: frngp_pgdata
+  promdata:

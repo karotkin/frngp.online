@@ -1,0 +1,266 @@
+/* ============================================================
+   node-api — телеметрия нод Ethereum (NodeE) и Base (NodeB).
+   Источник: Prometheus HTTP API (скрейпит node_exporter + клиенты
+   geth/lighthouse/reth/op-node по WireGuard). Шейпит JSON под фронт.
+
+   Эндпоинты:
+     GET /health           — живость
+     GET /telemetry        — всё для главной (карты клиентов + железо + ряды)
+     GET /debug/names      — список доступных метрик в Prometheus (для отладки имён)
+
+   Имена метрик у клиентов нестабильны между версиями, поэтому каждый
+   показатель задан СПИСКОМ кандидатов-выражений: берём первый непустой.
+   Отсутствующая метрика -> null (фронт показывает «—», не падает).
+   ============================================================ */
+const http = require('http');
+
+const PORT = process.env.PORT || 8080;
+const PROM = (process.env.PROM_URL || 'http://prometheus:9090').replace(/\/$/, '');
+const RANGE_SEC = Number(process.env.SERIES_RANGE_SEC) || 3600; // окно графиков: 1ч
+const STEP_SEC = Number(process.env.SERIES_STEP_SEC) || 90;     // ~40 точек
+
+/* instance-метки (как заданы в prometheus.yml как target host:port).
+   Переопределяемы через env, чтобы не хардкодить WG-адреса. */
+const I = {
+  nodee: process.env.NODEE_INSTANCE || '10.8.0.2',
+  nodeb: process.env.NODEB_INSTANCE || '10.8.0.3',
+};
+
+/* ---------------- Prometheus HTTP ---------------- */
+function promGet(path) {
+  return new Promise((resolve, reject) => {
+    const req = http.get(PROM + path, { timeout: 8000 }, (res) => {
+      let d = '';
+      res.setEncoding('utf8');
+      res.on('data', (c) => { d += c; });
+      res.on('end', () => {
+        try { resolve(JSON.parse(d)); }
+        catch (e) { reject(new Error('prom parse: ' + e.message)); }
+      });
+    });
+    req.on('timeout', () => req.destroy(new Error('prom timeout')));
+    req.on('error', reject);
+  });
+}
+const enc = encodeURIComponent;
+
+/* мгновенное значение скаляра первого ряда (или null) */
+async function instant(expr) {
+  try {
+    const j = await promGet(`/api/v1/query?query=${enc(expr)}`);
+    const r = j?.data?.result;
+    if (!r || !r.length) return null;
+    const v = Number(r[0].value[1]);
+    return Number.isFinite(v) ? v : null;
+  } catch { return null; }
+}
+/* первый непустой из списка кандидатов */
+async function firstOf(exprs) {
+  for (const e of exprs) {
+    const v = await instant(e);
+    if (v != null) return v;
+  }
+  return null;
+}
+/* range -> массив значений (ровный шаг), пропуски -> заполняем последним/0 */
+async function series(expr) {
+  const end = Math.floor(Date.now() / 1000);
+  const start = end - RANGE_SEC;
+  try {
+    const j = await promGet(
+      `/api/v1/query_range?query=${enc(expr)}&start=${start}&end=${end}&step=${STEP_SEC}`
+    );
+    const r = j?.data?.result?.[0]?.values;
+    if (!r || !r.length) return [];
+    return r.map((p) => {
+      const v = Number(p[1]);
+      return Number.isFinite(v) ? +v.toFixed(2) : 0;
+    });
+  } catch { return []; }
+}
+
+/* ---------------- выражения железа (node_exporter) ---------------- */
+const HW = (inst) => ({
+  up: `up{job="node",instance="${inst}:9100"}`,
+  cpu: `100 - (avg(rate(node_cpu_seconds_total{mode="idle",instance="${inst}:9100"}[2m])) * 100)`,
+  ram: `100 * (1 - node_memory_MemAvailable_bytes{instance="${inst}:9100"} / node_memory_MemTotal_bytes{instance="${inst}:9100"})`,
+  temp: `max(node_hwmon_temp_celsius{instance="${inst}:9100"})`,
+  netMbit: `8 * sum(rate(node_network_receive_bytes_total{device!~"lo|wg.*|docker.*|veth.*|br.*",instance="${inst}:9100"}[2m]) + rate(node_network_transmit_bytes_total{device!~"lo|wg.*|docker.*|veth.*|br.*",instance="${inst}:9100"}[2m])) / 1e6`,
+  diskFreePct: `100 * (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay",instance="${inst}:9100"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay",instance="${inst}:9100"})`,
+  uptimeSec: `node_time_seconds{instance="${inst}:9100"} - node_boot_time_seconds{instance="${inst}:9100"}`,
+});
+
+async function host(id, name, inst) {
+  const q = HW(inst);
+  const [up, cpu, ram, temp, net, dfree, upt] = await Promise.all([
+    instant(q.up), instant(q.cpu), instant(q.ram), instant(q.temp),
+    instant(q.netMbit), firstOf([`min(${q.diskFreePct})`]), instant(q.uptimeSec),
+  ]);
+  return {
+    id, name, instance: inst,
+    up: up === 1,
+    cpu: round(cpu), ram: round(ram), temp: round(temp),
+    netMbit: round(net), diskFreePct: round(dfree),
+    uptime: fmtUptime(upt),
+  };
+}
+
+/* ---------------- карты клиентов ---------------- */
+/* job-метка задаётся в prometheus.yml; head/peers/synced — кандидаты имён */
+const CLIENTS = [
+  {
+    id: 'geth', name: 'Geth', role: 'NodeE · EL', host: 'nodee', inst: () => I.nodee,
+    head: ['chain_head_block{job="geth"}'],
+    peers: ['p2p_peers{job="geth"}'],
+    // geth synced: голова догнала заголовок (нет отставания)
+    syncedExpr: '(chain_head_header{job="geth"} - chain_head_block{job="geth"}) < bool 4',
+  },
+  {
+    id: 'lighthouse', name: 'Lighthouse', role: 'NodeE · CL', host: 'nodee', inst: () => I.nodee,
+    head: ['beacon_head_slot{job="lighthouse"}'],
+    peers: ['libp2p_peers{job="lighthouse"}', 'libp2p_peer_count{job="lighthouse"}'],
+    syncedExpr: 'sync_eth2_synced{job="lighthouse"}',
+    // дистанция синхры (слотов отставания), если есть present-slot
+    lag: ['beacon_clock_present_slot{job="lighthouse"} - beacon_head_slot{job="lighthouse"}'],
+  },
+  {
+    id: 'reth', name: 'base-reth', role: 'NodeB · EL', host: 'nodeb', inst: () => I.nodeb,
+    head: ['reth_blockchain_tree_canonical_chain_height{job="reth"}', 'reth_sync_checkpoint{job="reth"}'],
+    peers: ['reth_network_connected_peers{job="reth"}'],
+    syncedExpr: 'reth_sync_checkpoint{job="reth"} > bool 0', // уточним при раскатке
+  },
+  {
+    id: 'opnode', name: 'op-node', role: 'NodeB · CL', host: 'nodeb', inst: () => I.nodeb,
+    head: ['op_node_default_refs_number{job="opnode",type="unsafe_l2"}', 'op_node_refs_number{job="opnode",type="unsafe_l2"}'],
+    safe: ['op_node_default_refs_number{job="opnode",type="safe_l2"}', 'op_node_refs_number{job="opnode",type="safe_l2"}'],
+    peers: ['op_node_default_p2p_peer_count{job="opnode"}', 'op_p2p_peer_count{job="opnode"}'],
+    syncedExpr: '1', // op-node «здоров», если safe двигается — оценим во фронте
+  },
+];
+
+async function clientCard(c) {
+  const [head, peers, synced, safe, lag] = await Promise.all([
+    firstOf(c.head || []),
+    firstOf(c.peers || []),
+    c.syncedExpr ? instant(c.syncedExpr) : null,
+    firstOf(c.safe || []),
+    firstOf(c.lag || []),
+  ]);
+  // статус: down если хоста/метрик нет; warn если рассинхрон/мало пиров; online ок
+  let status = 'online';
+  if (head == null && peers == null) status = 'down';
+  else if (synced === 0 || (lag != null && lag > 16) || (peers != null && peers < 1)) status = 'warn';
+  return {
+    id: c.id, name: c.name, role: c.role, host: c.host,
+    status,
+    head, peers,
+    synced: synced == null ? null : synced === 1,
+    safe: safe ?? null,
+    lag: lag == null ? null : Math.round(lag),
+  };
+}
+
+/* ---------------- сборка /telemetry ---------------- */
+async function buildTelemetry() {
+  const [hostE, hostB, cards] = await Promise.all([
+    host('nodee', 'NodeE', I.nodee),
+    host('nodeb', 'NodeB', I.nodeb),
+    Promise.all(CLIENTS.map(clientCard)),
+  ]);
+  const hosts = [hostE, hostB];
+  const hostById = { nodee: hostE, nodeb: hostB };
+
+  // ряды графиков (по хостам)
+  const cpuE = series(HW(I.nodee).cpu), cpuB = series(HW(I.nodeb).cpu);
+  const netInE = series(`8*sum(rate(node_network_receive_bytes_total{device!~"lo|wg.*|docker.*|veth.*|br.*",instance="${I.nodee}:9100"}[2m]))/1e6`);
+  const netOutE = series(`8*sum(rate(node_network_transmit_bytes_total{device!~"lo|wg.*|docker.*|veth.*|br.*",instance="${I.nodee}:9100"}[2m]))/1e6`);
+  const peersGeth = series('p2p_peers{job="geth"}');
+  const peersReth = series('reth_network_connected_peers{job="reth"}');
+  const diskReadB = series(`sum(rate(node_disk_read_bytes_total{instance="${I.nodeb}:9100"}[2m]))/1e6`);
+  const diskWriteB = series(`sum(rate(node_disk_written_bytes_total{instance="${I.nodeb}:9100"}[2m]))/1e6`);
+
+  const [scpuE, scpuB, sNetIn, sNetOut, sPeersG, sPeersR, sDR, sDW] = await Promise.all([
+    cpuE, cpuB, netInE, netOutE, peersGeth, peersReth, diskReadB, diskWriteB,
+  ]);
+
+  const series_ = {
+    cpu: [
+      { name: 'NodeE', color: '#6f9c5b', data: scpuE },
+      { name: 'NodeB', color: '#6d8f9b', data: scpuB },
+    ],
+    net: [
+      { name: 'Входящий', color: '#6f9c5b', data: sNetIn },
+      { name: 'Исходящий', color: '#c8704f', data: sNetOut },
+    ],
+    peers: [
+      { name: 'Geth', color: '#6f9c5b', data: sPeersG },
+      { name: 'reth', color: '#cba23e', data: sPeersR },
+    ],
+    disk: [
+      { name: 'Чтение', color: '#6d8f9b', data: sDR },
+      { name: 'Запись', color: '#cba23e', data: sDW },
+    ],
+  };
+
+  const synced = cards.filter((c) => c.status === 'online').length;
+  const peersTotal = cards.reduce((a, c) => a + (c.peers || 0), 0);
+
+  return {
+    ts: new Date().toISOString(),
+    kpi: {
+      clientsTotal: cards.length,
+      clientsOnline: synced,
+      hostsUp: hosts.filter((h) => h.up).length,
+      peersTotal,
+    },
+    hosts,
+    cards: cards.map((c) => ({ ...c, hw: hostById[c.host] || null })),
+    series: series_,
+  };
+}
+
+/* ---------------- helpers ---------------- */
+const round = (v) => (v == null ? null : Math.round(v));
+function fmtUptime(sec) {
+  if (sec == null || !Number.isFinite(sec)) return null;
+  const d = Math.floor(sec / 86400);
+  const h = Math.floor((sec % 86400) / 3600);
+  return `${d}д ${String(h).padStart(2, '0')}ч`;
+}
+const send = (res, code, obj) => {
+  res.statusCode = code;
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Cache-Control', 'no-store');
+  res.end(JSON.stringify(obj));
+};
+
+/* список имён метрик — для отладки реальных имён у клиентов */
+async function debugNames(res) {
+  const j = await promGet('/api/v1/label/__name__/values').catch(() => null);
+  send(res, 200, { count: j?.data?.length || 0, names: j?.data || [] });
+}
+
+/* ---------------- router ---------------- */
+let cache = null, cacheAt = 0;
+const CACHE_MS = 4000;
+
+const server = http.createServer(async (req, res) => {
+  const { pathname } = new URL(req.url, 'http://x');
+  try {
+    if (pathname === '/health') return send(res, 200, { ok: true, prom: PROM });
+    if (pathname === '/debug/names') return await debugNames(res);
+    if (pathname === '/telemetry' || pathname === '/') {
+      if (cache && Date.now() - cacheAt < CACHE_MS) return send(res, 200, cache);
+      cache = await buildTelemetry();
+      cacheAt = Date.now();
+      return send(res, 200, cache);
+    }
+    send(res, 404, { error: 'not found' });
+  } catch (e) {
+    console.error(pathname, '->', e.message);
+    send(res, 502, { error: 'server error', detail: e.message });
+  }
+});
+
+server.listen(PORT, () => console.log('node-api on :' + PORT + ' prom=' + PROM));

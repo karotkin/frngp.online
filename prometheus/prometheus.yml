@@ -1,0 +1,43 @@
+# Prometheus — скрейп нод ETH (NodeE) и Base (NodeB) по WireGuard.
+# WG: web=10.8.0.1, NodeE=10.8.0.2, NodeB=10.8.0.3.
+# Метрики НИКОГДА не публичны — только в приватном туннеле.
+global:
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  external_labels:
+    monitor: frngp
+
+scrape_configs:
+  # ---- железо обоих хостов ----
+  - job_name: node
+    static_configs:
+      - targets: ['10.8.0.2:9100']
+        labels: { host: nodee }
+      - targets: ['10.8.0.3:9100']
+        labels: { host: nodeb }
+
+  # ---- NodeE · Ethereum L1 ----
+  - job_name: geth
+    metrics_path: /debug/metrics/prometheus
+    static_configs:
+      - targets: ['10.8.0.2:6060']
+        labels: { host: nodee }
+
+  - job_name: lighthouse
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['10.8.0.2:5054']
+        labels: { host: nodee }
+
+  # ---- NodeB · Base L2 ----
+  - job_name: reth
+    metrics_path: /
+    static_configs:
+      - targets: ['10.8.0.3:9001']
+        labels: { host: nodeb }
+
+  - job_name: opnode
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['10.8.0.3:7300']
+        labels: { host: nodeb }
