@@ -54,6 +54,14 @@ async function instant(expr) {
     return Number.isFinite(v) ? v : null;
   } catch { return null; }
 }
+/* значение метки label первого ряда (или null) */
+async function instantLabel(expr, label) {
+  try {
+    const j = await promGet(`/api/v1/query?query=${enc(expr)}`);
+    const r = j?.data?.result;
+    return r && r.length ? (r[0].metric?.[label] ?? null) : null;
+  } catch { return null; }
+}
 /* первый непустой из списка кандидатов */
 async function firstOf(exprs) {
   for (const e of exprs) {
@@ -179,25 +187,22 @@ async function clientCard(c) {
 }
 
 /* ---------------- прогресс staged-sync reth (textfile-экспортёр) ---------------- */
-const STAGE_NAMES = {
-  1: 'Headers', 2: 'Bodies', 3: 'SenderRecovery', 4: 'Execution', 5: 'Merkle',
-  6: 'AccountHashing', 7: 'StorageHashing', 8: 'TxLookup', 9: 'IndexAcct',
-  10: 'IndexStorage', 11: 'PruneSenders', 12: 'Prune', 13: 'Era', 14: 'Finish',
-};
 async function fetchRethSync() {
-  const [idx, cp, tg, live, rate] = await Promise.all([
+  const [idx, total, cp, tg, live, rate, stageName] = await Promise.all([
     instant('reth_sync_stage_index'),
+    instant('reth_sync_stage_total'),
     instant('reth_sync_stage_checkpoint'),
     instant('reth_sync_stage_target'),
     instant('reth_sync_live'),
     instant('rate(reth_sync_stage_checkpoint[10m])'),
+    instantLabel('reth_sync_stage_checkpoint', 'stage'), // реальное имя стадии из метки
   ]);
   if (idx == null) return null; // экспортёр ещё не отдал
   const pct = tg > 0 ? Math.min(100, +(100 * cp / tg).toFixed(1)) : null;
   let etaSec = null;
   if (rate > 0 && tg > cp) etaSec = Math.round((tg - cp) / rate);
   return {
-    stage: STAGE_NAMES[idx] || '—', idx, total: 14,
+    stage: stageName || '—', idx, total: total || 14,
     pct, etaSec, live: live === 1,
   };
 }
