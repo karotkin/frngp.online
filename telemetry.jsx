@@ -234,12 +234,12 @@ function TelemetryPage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap)' }}>
       {/* header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
+      <div className="page-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
         <div>
           <div className="eyebrow">Ноды Ethereum · Base — мониторинг</div>
-          <h1 style={{ margin: '4px 0 0', fontSize: 27, fontWeight: 700, letterSpacing: '-.02em' }}>Телеметрия нод</h1>
+          <h1 className="page-title" style={{ margin: '4px 0 0', fontSize: 27, fontWeight: 700, letterSpacing: '-.02em' }}>Телеметрия нод</h1>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 26 }}>
+        <div className="kpi-row" style={{ display: 'flex', alignItems: 'center', gap: 26 }}>
           <HeadStat label="Клиенты" value={`${kpi.clientsOnline ?? '—'}`} unit={`/ ${kpi.clientsTotal ?? cards.length}`} accent="var(--green-d)" />
           <HeadStat label="Хосты" value={`${kpi.hostsUp ?? '—'}`} unit="/ 2" />
           <HeadStat label="Пиры всего" value={fmtInt(kpi.peersTotal || 0)} unit="" />
@@ -253,7 +253,7 @@ function TelemetryPage() {
       </div>
 
       {/* карточки клиентов */}
-      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(4, cards.length) || 1}, 1fr)`, gap: 'var(--gap)' }}>
+      <div className="cards-grid" style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(4, cards.length) || 1}, 1fr)`, gap: 'var(--gap)' }}>
         {cards.map((c) => <NodeCard key={c.id} c={c} spark={sparkByHost[HOST_NAME[c.host]]} />)}
       </div>
 
@@ -261,7 +261,7 @@ function TelemetryPage() {
       {hosts.map((h) => <NodeChartSection key={h.id} host={h} series={series} />)}
 
       {/* интеграции + алерты */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 'var(--gap)' }}>
+      <div className="two-col" style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 'var(--gap)' }}>
         <div className="card" style={{ padding: 'var(--pad)' }}>
           <SectionTitle right={<span className={`pill ${live ? 'green' : 'gold'}`}><span className="dot live-dot" />{live ? 'сбор идёт' : 'lag'}</span>}>Стек мониторинга</SectionTitle>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -345,7 +345,7 @@ function NodeChartSection({ host, series }) {
           {host.up && <span style={{ color: 'var(--ink-3)', marginLeft: 8, fontWeight: 500 }}>uptime {host.uptime || '—'}</span>}
         </span>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--gap)' }}>
+      <div className="charts-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--gap)' }}>
         <ChartCard title="Нагрузка CPU, %" series={pick(series.cpu)} max={100} unit="%" area={false} />
         <ChartCard title="Сеть, Мбит/с" series={pick(series.net)} unit="Мбит" />
         <ChartCard title="P2P-пиры" series={pick(series.peers)} unit="" area={false} />

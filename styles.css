@@ -123,3 +123,41 @@ body { font-size: 15px; }
 
 input, button, textarea { font-family: inherit; color: inherit; }
 button { cursor: pointer; }
+
+/* ============================================================
+   Адаптив (мобильные / планшеты)
+   ============================================================ */
+/* планшет: карточки в 2 колонки */
+@media (max-width: 1100px) {
+  .cards-grid { grid-template-columns: repeat(2, 1fr) !important; }
+}
+
+/* мобильный: всё в 1 колонку, сайдбар сверху */
+@media (max-width: 760px) {
+  .app-shell { flex-direction: column !important; }
+  .app-sidebar {
+    width: 100% !important; height: auto !important; position: static !important;
+    flex-direction: row !important; flex-wrap: wrap; align-items: center;
+    border-right: none !important; border-bottom: 1px solid var(--line);
+    padding: 10px 14px !important; gap: 10px;
+  }
+  .app-sidebar > div:first-child { padding: 0 !important; }   /* лого без нижнего отступа */
+  .app-sidebar nav { flex-direction: row !important; flex: 1 1 auto; gap: 6px; }
+  .app-sidebar nav button { padding: 8px 10px !important; }
+  .app-sidebar nav button span:nth-child(2) span:nth-child(2) { display: none; }  /* скрыть хинт под пунктом */
+  .sidebar-footer { display: none !important; }               /* тема/статус/хинт на мобиле прячем */
+  .app-main { padding: 16px 13px 48px !important; }
+
+  .cards-grid { grid-template-columns: 1fr !important; }
+  .charts-2  { grid-template-columns: 1fr !important; }
+  .two-col   { grid-template-columns: 1fr !important; }
+
+  .kpi-row { gap: 16px !important; row-gap: 10px; flex-wrap: wrap; }
+  .page-head { gap: 12px !important; }
+}
+
+/* совсем узкие: ужать заголовок и KPI */
+@media (max-width: 420px) {
+  .kpi-row > div { padding-right: 14px !important; }
+  .page-title { font-size: 22px !important; }
+}

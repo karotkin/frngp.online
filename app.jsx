@@ -22,7 +22,7 @@ const NAV = [
 
 function Sidebar({ page, setPage, online, theme, onSetTheme }) {
   return (
-    <aside style={{ width: 232, flexShrink: 0, borderRight: '1px solid var(--line)',
+    <aside className="app-sidebar" style={{ width: 232, flexShrink: 0, borderRight: '1px solid var(--line)',
       background: 'var(--surface)', display: 'flex', flexDirection: 'column', padding: '22px 16px',
       position: 'sticky', top: 0, height: '100vh' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '4px 8px 22px' }}>
@@ -53,7 +53,7 @@ function Sidebar({ page, setPage, online, theme, onSetTheme }) {
         })}
       </nav>
 
-      <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div className="sidebar-footer" style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
         {/* переключатель темы */}
         <div style={{ display: 'flex', gap: 4, padding: 4, background: 'var(--surface-2)',
           borderRadius: 'var(--radius-s)', border: '1px solid var(--line-soft)' }}>
@@ -107,9 +107,9 @@ function App() {
   const names = { dc: t.name_dc, proc: t.name_proc, parse: t.name_parse, conv: t.name_conv };
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh' }}>
+    <div className="app-shell" style={{ display: 'flex', minHeight: '100vh' }}>
       <Sidebar page={page} setPage={setPage} online={4} theme={t.theme} onSetTheme={(v) => setTweak('theme', v)} />
-      <main style={{ flex: 1, minWidth: 0, padding: '26px 30px 60px', maxWidth: 1500, margin: '0 auto', width: '100%' }}>
+      <main className="app-main" style={{ flex: 1, minWidth: 0, padding: '26px 30px 60px', maxWidth: 1500, margin: '0 auto', width: '100%' }}>
         {page === 'tele'
           ? <TelemetryPage names={names} />
           : <PurchasesPage names={names} rate={rate} setRate={(v) => { setRate(v); setTweak('rate', v); }} />}
