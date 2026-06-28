@@ -85,7 +85,7 @@ function nodeStats(c) {
     { label: 'safe', value: dash(c.safe) },
     { label: 'пиры', value: dash(c.peers), meter: c.peers, max: 80 },
     syncing
-      ? { label: 'EL-sync', value: s.pct != null ? `${s.pct}%` : '—', meter: s.pct, max: 100 }
+      ? { label: 'EL-sync', value: s.pct != null ? `${s.pct}%` : '—', meter: s.pct, max: 100, stack: true }
       : { label: 'отставание', value: fmtBehind(c.behindSec) },
   ];
   if (c.id === 'lighthouse') return [
@@ -98,8 +98,8 @@ function nodeStats(c) {
   if (c.id === 'reth' && syncing) return [
     { label: 'голова', value: dash(c.head) },
     { label: 'пиры', value: dash(c.peers), meter: c.peers, max: 60 },
-    { label: `стадия ${s.idx}/${s.total}`, value: s.stage },
-    { label: 'прогресс', value: (s.pct != null ? `${s.pct}%` : '—') + (s.etaSec ? ` ${fmtEta(s.etaSec)}` : ''), meter: s.pct, max: 100 },
+    { label: `стадия ${s.idx}/${s.total}`, value: s.stage, stack: true },
+    { label: 'прогресс', value: (s.pct != null ? `${s.pct}%` : '—') + (s.etaSec ? ` ${fmtEta(s.etaSec)}` : ''), meter: s.pct, max: 100, stack: true },
   ];
   return [
     { label: 'голова', value: dash(c.head) },
@@ -132,7 +132,7 @@ function NodeCard({ c, spark }) {
 
       {/* метрики ноды */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 18px' }}>
-        {stats.map((s, i) => <Stat key={i} label={s.label} value={s.value} meter={s.meter} max={s.max || 100} />)}
+        {stats.map((s, i) => <Stat key={i} label={s.label} value={s.value} meter={s.meter} max={s.max || 100} stack={s.stack} />)}
       </div>
 
       {/* железо хоста */}
@@ -156,13 +156,20 @@ function NodeCard({ c, spark }) {
   );
 }
 
-function Stat({ label, value, meter, max = 100 }) {
+function Stat({ label, value, meter, max = 100, stack }) {
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: meter != null ? 6 : 2 }}>
-        <span className="eyebrow" style={{ fontSize: 10 }}>{label}</span>
-        <span style={{ fontWeight: 700, fontSize: 15 }} className="tnum">{value}</span>
-      </div>
+      {stack ? (
+        <div style={{ marginBottom: meter != null ? 6 : 2 }}>
+          <div className="eyebrow" style={{ fontSize: 10, marginBottom: 3 }}>{label}</div>
+          <div style={{ fontWeight: 700, fontSize: 15, lineHeight: 1.15 }} className="tnum">{value}</div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: meter != null ? 6 : 2 }}>
+          <span className="eyebrow" style={{ fontSize: 10 }}>{label}</span>
+          <span style={{ fontWeight: 700, fontSize: 15 }} className="tnum">{value}</span>
+        </div>
+      )}
       {meter != null && <Meter value={meter} max={max} />}
     </div>
   );
